@@ -1,0 +1,207 @@
+
+<!DOCTYPE html>
+<html lang="en" >
+
+<head>
+  <meta charset="UTF-8">
+  
+  
+  
+
+  <title>Primes 3 JS</title>
+
+    <link rel="canonical" href="https://codepen.io/vpelss/pen/EaPKjEq">
+  
+  
+  
+  
+
+  
+  
+  
+</head>
+
+<body>
+  <p>Generates prime numbers by dividing and testing the next candidate number by all the previously found primes. This reduces the used array space compared to the the Sieve method which stores all the non prime numbers. Note how much longer this takes to run. The prime numbers are very sparce, so to get a large number of prime numbers we need to divide larger numbers by an ever growing array of prime numbers.<br><a href="https://github.com/vpelss/primes" target="_blank">Code at Github</a> IE not supported.</p>
+
+<form action="#">
+
+  Check for primes up to <input id="howMany" type="text" value="10"> (too many may crash your browser session. 100,000,000 is probably the limit)
+  <br><br>
+
+  Buffer Size <input id="bufferSize" type="text" value="1,000,000"> (webworker transfer primes in batches of...)
+  <br><br>
+  <input type="submit" value="Give me my primes" onclick="runForestRun();return false;">
+  <br><br>
+
+Changing this value will no longer give you primes: <input id="fakePrime" type="text" value="2"> Primes are only divisible by one and itself. When you change this value it includes all multiple values less than this value in the output. Eg: 5 will alow all multiples of 4, 3, and 2 in the output.
+  <br><br>
+
+</form>
+<br>
+
+<p>Logger</p>
+<div id="logger"></div>
+<br>
+<p>Primes</p>
+<div id="primes" contenteditable="false"></div>
+
+<script id="worker" type="javascript/worker">
+  onmessage = function(event) {
+      var txt = event.data;
+      var input = JSON.parse(txt);
+      GetPrimes(input);
+    };
+    var bufferSize;
+    var buffer = '';
+    var primeLimit;
+    var handOffNumber;
+    var notPrime = []; //Array of numbers known to not be prime. Better time and slightly less ram than objects
+    var primeCount;
+    var notPrimeCount;
+
+    function GetPrimes(input) {
+      primeLimit = input.howMany;
+      bufferSize = input.bufferSize;
+      let shouldBeTwo = input.fakePrime;
+      var t0 = performance.now();
+      var limitSqrt = Math.floor(Math.sqrt(primeLimit));
+      var num;
+      notPrimeCount = 0;
+      primeCount = 0;
+      handOffNumber = 0;
+      postMessage(`msg:Starting calc of all non primes.</br>`);
+      //calculate and print primes up to Math.sqrt(primeLimit)
+      //we are actually generating a list of non primes by adding each number (up to Math.sqrt(primeLimit) ) repeatedly until we reach primeLimit.
+      //all sums will not be prime
+      var sum;
+      for (num = shouldBeTwo ; num <= limitSqrt ; num++) {
+        sum = num;
+        //bufferIndex++;
+        if (notPrime[num]) { //this number is not prime. an earlier factor was repeatedly summed to equal this number
+          continue; //no need to do a sum for this #. eg if number is 6, all previous factors (2 , 3) were summed and cover he sums of 6. This saves a lot of time!!! the best example is 2, all even numbers have already been marked notPrime and can be skipped
+        } else { //this number has not yet been marked 'not prime' so it MUST be prime as we have already checked for all possible lesser factors
+          addToBuffer(num);
+          primeCount++;
+        }
+        while (sum + num <= primeLimit) { //add $num repeatedly up to limit. all sums will not be prime. the sums are same as the multiples of num
+          sum = sum + num;
+          if (notPrime[sum]) {
+            continue;
+          } //is it already in the notPrime array. skip
+          notPrimeCount++;
+          notPrime[sum] = true; //not prime
+        }
+      }
+      handOffNumber = num;
+      var t1 = performance.now();
+      postMessage("msg:All non primes are marked. " + (t1 - t0) / 1000 + '</br>');
+      postMessage(`msg:Now webworker will start to send primes in batches of ${bufferSize}.</br>`);
+      //at this point we have completed work on numbers up to limitSqrt
+      //and have bfs of primes up to limitSqrt
+      //notPrime array should now be empty up to limitSqrt as we have no need of notPrime before limitSqrt
+      //now all we need to do is go through notPrime array from limitSqrt to primeLimit to find the rest of the primes
+      //print already calculated primes from limitSqrt to primeLimit
+      for (num = handOffNumber; num <= primeLimit; num++) {
+        if (!notPrime[num]) {
+          primeCount++;
+          addToBuffer(num);
+        } else {}
+      }
+      if (buffer.length > 0) { //still something to return
+        postMessage(buffer);
+      }
+      //clean up
+      buffer = '';
+      notPrime = []; //clear array
+      var t2 = performance.now();
+      postMessage('msg:</br>All primes have been sent from webworker. ' + (t2 - t1) / 1000 + '</br>');
+      postMessage('msg:DOM update may take time to display primes for larger numbers.</br>');
+      postMessage('msg:Number of primes: ' + primeCount + '</br>');
+      postMessage('msg:Not prime count: ' + notPrimeCount + '</br>');
+      postMessage('done');
+    }
+    var bufferCount = 0;
+
+    function addToBuffer(num) {
+      buffer += num + ' ';
+      if (buffer.length > bufferSize) {
+        postMessage(buffer);
+        bufferCount++;
+        postMessage('msg:.');
+        buffer = '';
+      }
+    }
+  </script>
+  
+    <script id="rendered-js" >
+//inline worker
+var blob = new Blob([document.querySelector("#worker").textContent], {
+  type: "text/javascript"
+});
+var worker = new Worker(window.URL.createObjectURL(blob));
+var t0;
+//messages from webworker
+worker.onmessage = function (event) {
+  if (event.data.startsWith("done")) {
+    //webworker telling us it is done
+    document.getElementById("logger").innerHTML += "Done</br>";
+    var t1 = performance.now();
+    document.getElementById("logger").innerHTML +=
+      "Total time taken: " + (t1 - t0) / 1000 + "</br>";
+  }
+  if (event.data.startsWith("msg:")) {
+    //just notifications from webworker
+    document.getElementById("logger").innerHTML += event.data.replace(
+      "msg:",
+      ""
+    );
+  } else {
+    //primes from webworker buffer
+    document.getElementById("primes").innerHTML += event.data + " ";
+  }
+};
+
+function runForestRun() {
+  t0 = performance.now();
+  document.getElementById("logger").innerHTML = "";
+  document.getElementById("primes").innerHTML = "";
+  var howMany = document.getElementById("howMany").value.replace(/,/g, "");
+  var bufferSize = document
+    .getElementById("bufferSize")
+    .value.replace(/,/g, "");
+  let fakePrime = document.getElementById("fakePrime").value;
+
+  var jsonString = `{
+        "howMany" : ${howMany} ,
+        "bufferSize" : ${bufferSize},
+        "fakePrime" : ${fakePrime}
+        }`;
+
+  let primeArray = [2]; //start with first prime
+  let lastNumber = 2;
+
+  do {
+    lastNumber++;
+    let isItPrime = true; //assume
+    for (const nextPrime of primeArray) {
+      if (lastNumber % nextPrime == 0) {
+        isItPrime = false;
+        break;
+      }
+    }
+    if (isItPrime) {
+      primeArray.push(lastNumber);
+    }
+  } while (primeArray.length < howMany);
+
+  document.getElementById("primes").innerHTML = primeArray;
+
+  //worker.postMessage(jsonString);
+}
+  </script>
+
+  
+</body>
+
+</html>
