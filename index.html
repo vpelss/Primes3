@@ -22,18 +22,16 @@
 </head>
 
 <body>
-  <p>Generates prime numbers by dividing and testing the next candidate number by all the previously found primes. This reduces the used array space compared to the the Sieve method which stores all the non prime numbers. Note how much longer this takes to run. The prime numbers are very sparce, so to get a large number of prime numbers we need to divide larger numbers by an ever growing array of prime numbers.<br><a href="https://github.com/vpelss/primes" target="_blank">Code at Github</a> IE not supported.</p>
+  <p>Generates prime numbers by dividing and testing the next candidate number by all the previously found primes. This reduces the used array space compared to the the Sieve method which stores all the non prime numbers. Note how much longer this takes to run. The prime numbers are very sparce, so to get a large number of prime numbers we need to divide larger numbers by an ever growing array of prime numbers.<br><a href="https://github.com/vpelss/Primes3" target="_blank">Code at Github</a> IE not supported.</p>
 
 <form action="#">
-
-  Check for primes up to <input id="howMany" type="text" value="1000"> (too many may crash your browser session. 100,000,000 is probably the limit)
+  Check for primes up to <input id="howMany" type="text" value="1000"> (too many will take forever. 1,000,000 is probably the limit)
   <br><br>
 
   Buffer Size <input id="bufferSize" type="text" value="10,000"> (webworker transfer primes in batches of...)
   <br><br>
   <input type="submit" value="Give me my primes" onclick="runForestRun();return false;">
   <br><br>
-
 </form>
 <br>
 
@@ -51,15 +49,13 @@
     var bufferSize;
     var buffer = '';
     var primeLimit;
-    var handOffNumber;
-    var notPrime = []; //Array of numbers known to not be prime. Better time and slightly less ram than objects
     var primeCount;
     var notPrimeCount;
+    var bufferCount = 0;
 
     function GetPrimes(input) {
       primeLimit = input.howMany;
       bufferSize = input.bufferSize;
-      let shouldBeTwo = input.fakePrime;
       var t0 = performance.now();
       let primeArray = [2]; //start with first prime
       let lastNumber = 2;
@@ -68,7 +64,7 @@
       notPrimeCount = 0;
       handOffNumber = 0;
       postMessage(`msg:Starting calc of primes.</br>`);
-       postMessage(`msg:Still working...</br>`);
+      postMessage(`msg:Still working...</br>`);
      
   do {
     lastNumber++;
@@ -94,25 +90,22 @@
    
       //clean up
       buffer = '';
-      notPrime = []; //clear array
+      primeArray = [];
       var t2 = performance.now();
          
       postMessage('msg:</br>All primes have been sent from webworker. ' + (t2 - t0) / 1000 + '</br>');
       postMessage('msg:DOM update may take time to display primes for larger numbers.</br>');
       postMessage('msg:Number of primes: ' + primeCount + '</br>');
       postMessage('msg:Not prime count: ' + notPrimeCount + '</br>');
-      postMessage('done');
     }
-  
-    var bufferCount = 0;
 
     function addToBuffer(num) {
       buffer += num + ' ';
       if (buffer.length > bufferSize) {
         postMessage(buffer);
         bufferCount++;
-        let percent = 100*(primeCount/primeLimit);
-        postMessage('msg:' + percent + '%,');
+        let percent = 100n * BigInt(primeCount) / BigInt(primeLimit) ;
+        postMessage('msg:' + percent + '% ...');
         buffer = '';
       }
     }
@@ -136,7 +129,7 @@ worker.onmessage = function (event) {
   }
   if (event.data.startsWith("msg:")) {
     //just notifications from webworker
-    document.getElementById("logger").innerHTML = '';
+    document.getElementById("logger").innerHTML = ""; 
     document.getElementById("logger").innerHTML += event.data.replace(
       "msg:",
       ""
@@ -155,34 +148,12 @@ function runForestRun() {
   var bufferSize = document
     .getElementById("bufferSize")
     .value.replace(/,/g, "");
-  //let fakePrime = document.getElementById("fakePrime").value;
 
   var jsonString = `{
         "howMany" : ${howMany} ,
         "bufferSize" : ${bufferSize}
         }`;
 
-  /*
-  let primeArray = [2]; //start with first prime
-  let lastNumber = 2;
-
-  do {
-    lastNumber++;
-    let isItPrime = true; //assume
-    for (const nextPrime of primeArray) {
-      if (lastNumber % nextPrime == 0) {
-        isItPrime = false;
-        break;
-      }
-    }
-    if (isItPrime) {
-      primeArray.push(lastNumber);
-    }
-  } while (primeArray.length < howMany);
-
-  document.getElementById("primes").innerHTML = primeArray;
-*/
-  
   worker.postMessage(jsonString);
 }
   </script>
